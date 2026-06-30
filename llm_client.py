@@ -46,16 +46,6 @@ def _model() -> str:
     return os.getenv("LLM_MODEL", "claude-opus-4-8")
 
 
-def _pdf_document_block(file_path: str) -> dict:
-    """Claude 原生 PDF 能力：把整份 PDF 作为 document 块（视觉 + 文本层）。"""
-    with open(file_path, "rb") as f:
-        data = base64.standard_b64encode(f.read()).decode("utf-8")
-    return {
-        "type": "document",
-        "source": {"type": "base64", "media_type": _PDF_TYPE, "data": data},
-    }
-
-
 def _image_block(file_path: str, mime: str) -> dict:
     with open(file_path, "rb") as f:
         data = base64.standard_b64encode(f.read()).decode("utf-8")
@@ -103,13 +93,11 @@ def read_to_markdown(file_path: str) -> str:
     name = os.path.basename(file_path)
 
     if mime == _PDF_TYPE:
-        logger.info("Claude 视觉转写开始（PDF 原生能力）: %s", name)
-        try:
-            md = _generate_markdown([_pdf_document_block(file_path)])
-        except anthropic.BadRequestError as exc:
-            # 对端不支持/拒绝 PDF document 时，回退到逐页渲染走视觉
-            logger.warning("原生 PDF 被拒绝，回退为逐页渲染视觉转写：%s", exc)
-            md = _generate_markdown(_pdf_to_image_blocks(file_path))
+        # 统一逐页渲染成图片再走视觉：原生 document 块各家网关支持不一
+        # （如千问 Anthropic 兼容端点会“接受但不解析”，返回乱码且不报错无法回退），
+        # 而图片视觉路线对 Claude / 千问等均稳定可用。
+        logger.info("视觉转写开始（PDF 逐页渲染）: %s", name)
+        md = _generate_markdown(_pdf_to_image_blocks(file_path))
     elif mime in _IMAGE_TYPES:
         logger.info("Claude 视觉转写开始（图片）: %s", name)
         md = _generate_markdown([_image_block(file_path, mime)])
