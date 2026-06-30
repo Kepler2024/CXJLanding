@@ -1,0 +1,24 @@
+services:
+  somark-battle:
+    build: .
+    image: somark-battle:latest
+    container_name: somark-battle
+    # 采用端口映射方式，禁止使用 network: host
+    ports:
+      - "${HOST_PORT:-7860}:7860"
+    env_file:
+      - .env
+    environment:
+      # 容器内固定监听 7860，对外端口由 HOST_PORT 控制
+      APP_PORT: "7860"
+      LOG_DIR: "/app/logs"
+    volumes:
+      # 日志持久化到宿主机，便于查看轮转后的日志
+      - ./logs:/app/logs
+    # 自动重启功能
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
